@@ -27,6 +27,16 @@ function findChrome(): string {
   throw new Error('Chrome/Chromium not found. Install it or pass --chrome-path');
 }
 
+interface PuppeteerCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  expires: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+}
+
 async function main() {
   const chromePath = process.argv.includes('--chrome-path')
     ? process.argv[process.argv.indexOf('--chrome-path') + 1]
@@ -68,19 +78,14 @@ async function main() {
   console.error(chalk.dim('  Waiting for login...'));
 
   // Poll until reddit_session cookie appears
-  let redditCookies: Record<string, string> = {};
+  let allCookies: PuppeteerCookie[] = [];
   while (true) {
     try {
       const cookies = await page.cookies();
-      redditCookies = {};
-      for (const cookie of cookies) {
-        if (cookie.domain.includes('reddit.com')) {
-          redditCookies[cookie.name] = cookie.value;
-        }
-      }
-      if (redditCookies['reddit_session']) break;
+      allCookies = cookies;
+      const hasSession = cookies.some(c => c.name === 'reddit_session' && c.domain.includes('reddit.com'));
+      if (hasSession) break;
     } catch {
-      // browser closed by user before login
       break;
     }
     await new Promise(r => setTimeout(r, 1000));
@@ -88,17 +93,36 @@ async function main() {
 
   await browser.close();
 
-  if (!redditCookies['reddit_session']) {
+  const redditCookies = allCookies.filter(c => c.domain.includes('reddit.com'));
+
+  if (!redditCookies.some(c => c.name === 'reddit_session')) {
     console.error(chalk.red('\n  No reddit_session cookie found.'));
     console.error(chalk.dim('  Make sure you logged in before closing.'));
     process.exit(1);
   }
 
+  // Store cookies with expiry info
+  const cookiesMap: Record<string, string> = {};
+  const cookieMeta: Record<string, { value: string; expires: number; domain: string }> = {};
+
+  for (const c of redditCookies) {
+    cookiesMap[c.name] = c.value;
+    cookieMeta[c.name] = {
+      value: c.value,
+      expires: c.expires,
+      domain: c.domain,
+    };
+  }
+
   const existing = loadConfig();
-  saveConfig({ ...existing, cookies: redditCookies });
+  saveConfig({
+    ...existing,
+    cookies: cookiesMap,
+    cookieMeta,
+  });
 
   console.error(chalk.green('\n  Login successful!'));
-  console.error(chalk.dim(`  ${Object.keys(redditCookies).length} cookies saved to ${getConfigPath()}\n`));
+  console.error(chalk.dim(`  ${redditCookies.length} cookies saved to ${getConfigPath()}\n`));
 }
 
 main().catch(err => {

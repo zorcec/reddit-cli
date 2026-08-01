@@ -4,7 +4,22 @@ import { fork } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { saveConfig, loadConfig, clearConfig, getConfigPath, getAuthTier } from '../config.js';
+import { saveConfig, loadConfig, clearConfig, getConfigPath, getAuthTier, type CookieMeta } from '../config.js';
+
+const CRITICAL_COOKIES = ['reddit_session', 'csrf_token', 'loid', 'token_v2'];
+
+function formatExpiry(expires: number): string {
+  if (expires <= 0) return 'session';
+  const date = new Date(expires * 1000);
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMs < 0) return chalk.red('expired');
+  if (diffHours < 24) return chalk.yellow(`expires in ${diffHours}h`);
+  return `expires in ${diffDays}d`;
+}
 
 export function registerAuthCommand(program: Command): void {
   const auth = program
@@ -100,8 +115,9 @@ export function registerAuthCommand(program: Command): void {
 
   auth
     .command('whoami')
-    .description('Show current auth status')
-    .action(() => {
+    .description('Show current auth status with cookie details')
+    .option('--verbose', 'Show all cookies including non-critical ones')
+    .action(async (options: { verbose?: boolean }) => {
       const config = loadConfig();
       const tier = getAuthTier(config);
 
@@ -111,18 +127,80 @@ export function registerAuthCommand(program: Command): void {
         console.error(chalk.yellow('  Not authenticated'));
         console.error(chalk.dim('  Running as anonymous (10 requests/min)'));
         console.error(chalk.dim('  Run "reddit auth login" or "reddit auth browser-login"'));
+        console.error('');
+        return;
+      }
+
+      console.error(chalk.green(`  Auth tier: ${tier}`));
+
+      if (tier === 'browser') {
+        const cookies = config.cookies ?? {};
+        const meta = config.cookieMeta ?? {};
+        const cookieCount = Object.keys(cookies).length;
+
+        console.error(chalk.dim(`  Cookies: ${cookieCount} captured`));
+        console.error('');
+
+        // Show critical cookies
+        console.error(chalk.bold('  Session cookies:'));
+        for (const name of CRITICAL_COOKIES) {
+          const present = !!cookies[name];
+          const metaInfo = meta[name];
+          const icon = present ? chalk.green('✓') : chalk.red('✗');
+          const label = name.padEnd(16);
+
+          if (present && metaInfo) {
+            const expiry = formatExpiry(metaInfo.expires);
+            console.error(`    ${icon} ${label} ${expiry}`);
+          } else if (present) {
+            console.error(`    ${icon} ${label} ${chalk.dim('present')}`);
+          } else {
+            console.error(`    ${icon} ${label} ${chalk.red('missing')}`);
+          }
+        }
+
+        // Show extra cookies in verbose mode
+        if (options.verbose) {
+          const extraCookies = Object.keys(cookies).filter(n => !CRITICAL_COOKIES.includes(n));
+          if (extraCookies.length > 0) {
+            console.error('');
+            console.error(chalk.bold('  Other cookies:'));
+            for (const name of extraCookies) {
+              const metaInfo = meta[name];
+              if (metaInfo) {
+                console.error(`    ${chalk.dim('•')} ${name.padEnd(16)} ${formatExpiry(metaInfo.expires)}`);
+              } else {
+                console.error(`    ${chalk.dim('•')} ${name}`);
+              }
+            }
+          }
+        }
+
+        // Check for expiring soon
+        const now = Date.now();
+        const expiringSoon = Object.entries(meta).filter(([name, m]) => {
+          if (m.expires <= 0) return false;
+          const diffMs = m.expires * 1000 - now;
+          return diffMs > 0 && diffMs < 24 * 60 * 60 * 1000;
+        });
+
+        if (expiringSoon.length > 0) {
+          console.error('');
+          console.error(chalk.yellow(`  ⚠ ${expiringSoon.length} cookie(s) expire within 24h — consider re-login`));
+        }
+
+        // Check for expired
+        const expired = Object.entries(meta).filter(([_, m]) => m.expires > 0 && m.expires * 1000 < now);
+        if (expired.length > 0) {
+          console.error('');
+          console.error(chalk.red(`  ✗ ${expired.length} cookie(s) expired — run "reddit auth browser-login"`));
+        }
       } else {
-        console.error(chalk.green(`  Auth tier: ${tier}`));
-        if (tier === 'browser') {
-          const cookieCount = config.cookies ? Object.keys(config.cookies).length : 0;
-          console.error(chalk.dim(`  Cookies: ${cookieCount} captured`));
-        } else {
-          if (config.clientId) {
-            console.error(chalk.dim(`  Client ID: ${config.clientId.slice(0, 8)}...`));
-          }
-          if (config.username) {
-            console.error(chalk.dim(`  Username: ${config.username}`));
-          }
+        if (config.clientId) {
+          console.error(chalk.dim(`  Client ID: ${config.clientId.slice(0, 8)}...`));
+        }
+        if (config.username) {
+          console.error(chalk.dim(`  Username: ${config.username}`));
         }
       }
 

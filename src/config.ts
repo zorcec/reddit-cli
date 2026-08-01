@@ -2,12 +2,19 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from '
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
+export interface CookieMeta {
+  value: string;
+  expires: number;
+  domain: string;
+}
+
 export interface RedditConfig {
   clientId?: string;
   clientSecret?: string;
   username?: string;
   password?: string;
   cookies?: Record<string, string>;
+  cookieMeta?: Record<string, CookieMeta>;
 }
 
 const CONFIG_DIR = join(homedir(), '.config', 'reddit-cli');
