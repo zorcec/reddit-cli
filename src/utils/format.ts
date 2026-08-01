@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { writeFileSync } from 'node:fs';
 
-export type OutputFormat = 'table' | 'json' | 'csv';
+export type OutputFormat = 'table' | 'json' | 'csv' | 'compact-json' | 'raw';
 
 export interface FormatOptions {
   format?: OutputFormat;
@@ -13,15 +13,14 @@ export function formatOutput(data: unknown, options: FormatOptions, meta?: Recor
 
   if (options.output) {
     writeFileSync(options.output, formatted + '\n', 'utf-8');
-    console.error(chalk.dim(`Written to ${options.output}`));
+    log(`Written to ${options.output}`);
   } else {
     console.log(formatted);
   }
 
   if (meta) {
-    for (const [key, value] of Object.entries(meta)) {
-      console.error(chalk.dim(`${key}: ${value}`));
-    }
+    const metaLine = Object.entries(meta).map(([k, v]) => `${k}: ${v}`).join(' | ');
+    log(metaLine);
   }
 }
 
@@ -29,11 +28,29 @@ export function formatString(data: unknown, format?: OutputFormat): string {
   switch (format) {
     case 'json':
       return JSON.stringify(data, null, 2);
+    case 'compact-json':
+      return JSON.stringify(data);
+    case 'raw':
+      return JSON.stringify(data, null, 2);
     case 'csv':
       return toCsv(data);
     case 'table':
     default:
       return toTable(data);
+  }
+}
+
+export function log(message: string): void {
+  console.error(chalk.dim(message));
+}
+
+export function warn(message: string): void {
+  console.error(chalk.yellow(`Warning: ${message}`));
+}
+
+export function debug(message: string, verbose: boolean): void {
+  if (verbose) {
+    console.error(chalk.dim(`[debug] ${message}`));
   }
 }
 
@@ -106,16 +123,4 @@ function formatValue(value: unknown): string {
   if (Array.isArray(value)) return value.join(', ');
   if (typeof value === 'object' && value !== null) return JSON.stringify(value);
   return String(value ?? '');
-}
-
-export function info(message: string): void {
-  console.error(chalk.dim(message));
-}
-
-export function warn(message: string): void {
-  console.error(chalk.yellow(`Warning: ${message}`));
-}
-
-export function error(message: string): void {
-  console.error(chalk.red(`Error: ${message}`));
 }

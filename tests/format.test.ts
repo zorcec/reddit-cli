@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { formatOutput, formatString, info, warn, error } from '../src/utils/format.js';
+import { formatOutput, formatString, log, warn } from '../src/utils/format.js';
 
 describe('format', () => {
   let consoleLogSpy: any;
@@ -19,6 +19,12 @@ describe('format', () => {
       const data = { foo: 'bar' };
       const result = formatString(data, 'json');
       expect(result).toBe(JSON.stringify(data, null, 2));
+    });
+
+    it('formats as compact JSON', () => {
+      const data = { foo: 'bar' };
+      const result = formatString(data, 'compact-json');
+      expect(result).toBe('{"foo":"bar"}');
     });
 
     it('formats as CSV', () => {
@@ -66,9 +72,9 @@ describe('format', () => {
     });
   });
 
-  describe('info', () => {
+  describe('log', () => {
     it('outputs to stderr', () => {
-      info('Test message');
+      log('Test message');
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
   });
@@ -76,13 +82,6 @@ describe('format', () => {
   describe('warn', () => {
     it('outputs warning to stderr', () => {
       warn('Test warning');
-      expect(consoleErrorSpy).toHaveBeenCalled();
-    });
-  });
-
-  describe('error', () => {
-    it('outputs error to stderr', () => {
-      error('Test error');
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
   });

@@ -2,103 +2,110 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { getRedditTools } from '../mcp-client.js';
 import { cacheGet, cacheSet } from '../cache.js';
-import { formatOutput, info } from '../utils/format.js';
+import { formatOutput, log, debug } from '../utils/format.js';
+import { validateResponse, printWarnings } from '../validate.js';
+import { ExplainResponseSchema } from '../schemas.js';
 import type { OutputFormat } from '../utils/format.js';
 
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour for explanations
+const CACHE_TTL_MS = 60 * 60 * 1000;
 
 export function registerExplainCommand(program: Command): void {
   program
     .command('explain')
     .description('Explain Reddit slang')
     .argument('<term>', 'Reddit term or slang to explain')
-    .option('-f, --format <fmt>', 'Output format: table|json|csv', 'table')
+    .option('-f, --format <fmt>', 'Output format: table|json|compact-json|csv|raw', 'table')
     .option('-o, --output <file>', 'Write output to file')
     .option('--no-cache', 'Skip cache, fetch fresh data')
+    .option('--verbose', 'Show debug info')
     .action(async (term: string, options: {
       format: OutputFormat;
       output?: string;
       cache: boolean;
+      verbose?: boolean;
     }) => {
       try {
         const tools = await getRedditTools();
+        const verbose = options.verbose ?? false;
 
-        // Build cache key
         const cacheKey = `explain|${term.toLowerCase()}`;
 
-        // Check cache
         if (options.cache !== false) {
           const cached = cacheGet<unknown>('explain', cacheKey, CACHE_TTL_MS);
           if (cached) {
-            formatOutput(cached, {
-              format: options.format,
-              output: options.output,
-            }, { source: 'cache' });
+            debug('Serving from cache', verbose);
+            formatOutput(cached, { format: options.format, output: options.output }, { source: 'cache' });
             return;
           }
         }
 
-        info(`Explaining "${term}"...`);
+        log(`Explaining "${term}"...`);
 
-        const result = await tools.redditExplain({ term });
+        const raw = await tools.redditExplain({ term });
 
-        // Cache result
+        debug(`Raw response keys: ${Object.keys(raw as object).join(', ')}`, verbose);
+
+        const { data, warnings } = validateResponse(ExplainResponseSchema, raw, 'explain');
+
         if (options.cache !== false) {
-          cacheSet('explain', cacheKey, result, CACHE_TTL_MS);
+          cacheSet('explain', cacheKey, raw, CACHE_TTL_MS);
         }
 
-        if (options.format === 'json') {
-          formatOutput(result, {
-            format: options.format,
-            output: options.output,
-          });
+        if (options.format === 'raw') {
+          formatOutput(raw, { format: 'raw', output: options.output });
+          printWarnings(warnings);
+          return;
+        }
+
+        if (options.format === 'json' || options.format === 'compact-json') {
+          formatOutput(data, { format: options.format, output: options.output });
         } else if (options.format === 'csv') {
-          const data = result as Record<string, unknown>;
-          const examples = Array.isArray(data.examples) ? data.examples : [];
-          const related = Array.isArray(data.relatedTerms) ? data.relatedTerms : [];
+          const examples = Array.isArray((data as any).examples) ? (data as any).examples : [];
+          const related = Array.isArray((data as any).relatedTerms) ? (data as any).relatedTerms : [];
           formatOutput([{
             term,
-            definition: data.definition ?? '',
+            definition: (data as any).definition ?? '',
             examples: examples.join('; '),
             related: related.join('; '),
-          }], {
-            format: options.format,
-            output: options.output,
-          });
+          }], { format: options.format, output: options.output });
         } else {
-          // Table format
-          const data = result as Record<string, unknown>;
           console.log(chalk.bold(`\n  ${term}`));
           console.log('');
 
-          if (data.definition) {
-            console.log(`  ${chalk.cyan('Definition')}: ${data.definition}`);
+          if ((data as any).definition) {
+            console.log(`  ${chalk.cyan('Definition')}: ${(data as any).definition}`);
           }
 
-          if (data.usage) {
-            console.log(`  ${chalk.cyan('Usage')}: ${data.usage}`);
+          if ((data as any).usage) {
+            console.log(`  ${chalk.cyan('Usage')}: ${(data as any).usage}`);
           }
 
-          if (Array.isArray(data.examples) && data.examples.length > 0) {
+          if (Array.isArray((data as any).examples) && (data as any).examples.length > 0) {
             console.log(chalk.bold(`\n  Examples:`));
-            for (const ex of data.examples) {
+            for (const ex of (data as any).examples) {
               console.log(`    • ${ex}`);
             }
           }
 
-          if (Array.isArray(data.relatedTerms) && data.relatedTerms.length > 0) {
+          if (Array.isArray((data as any).relatedTerms) && (data as any).relatedTerms.length > 0) {
             console.log(chalk.bold(`\n  Related terms:`));
-            console.log(`    ${data.relatedTerms.join(', ')}`);
+            console.log(`    ${(data as any).relatedTerms.join(', ')}`);
           }
 
-          if (data.origin) {
-            console.log(`\n  ${chalk.cyan('Origin')}: ${data.origin}`);
+          if ((data as any).origin) {
+            console.log(`\n  ${chalk.cyan('Origin')}: ${(data as any).origin}`);
           }
 
           console.log('');
         }
-      } catch (err) {
-        console.error(chalk.red(`Error: ${err instanceof Error ? err.message : String(err)}`));
+
+        printWarnings(warnings);
+      } catch (err: any) {
+        if (err?.message?.includes('403') || err?.message?.includes('forbidden')) {
+          console.error(chalk.red('\n  Authentication expired. Run: reddit auth browser-login\n'));
+        } else {
+          console.error(chalk.red(`Error: ${err instanceof Error ? err.message : String(err)}`));
+        }
         process.exit(1);
       }
     });

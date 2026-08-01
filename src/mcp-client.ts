@@ -3,7 +3,9 @@ import { CacheManager } from 'reddit-mcp-buddy/dist/core/cache.js';
 import { RateLimiter } from 'reddit-mcp-buddy/dist/core/rate-limiter.js';
 import { RedditAPI } from 'reddit-mcp-buddy/dist/services/reddit-api.js';
 import { RedditTools } from 'reddit-mcp-buddy/dist/tools/index.js';
-import { loadConfig, getConfigEnvVars, type RedditConfig } from './config.js';
+import { loadConfig, getConfigEnvVars } from './config.js';
+import { warn, debug } from './utils/format.js';
+import chalk from 'chalk';
 
 let toolsInstance: RedditTools | null = null;
 let warnedOnce = false;
@@ -17,14 +19,11 @@ class BrowserCookieAuthManager extends AuthManager {
   }
 
   override async load() {
-    // Don't load from env/file - we have cookies
     return null;
   }
 
   override isAuthenticated() {
-    // Return false so RedditAPI uses www.reddit.com instead of oauth.reddit.com
-    // We still include cookies in headers for authentication
-    return false;
+    return false; // Uses www.reddit.com, not oauth.reddit.com
   }
 
   override isTokenExpired() {
@@ -32,7 +31,7 @@ class BrowserCookieAuthManager extends AuthManager {
   }
 
   override async getAccessToken() {
-    return null; // No OAuth token for browser cookies
+    return null;
   }
 
   override async getHeaders() {
@@ -50,7 +49,7 @@ class BrowserCookieAuthManager extends AuthManager {
   }
 
   override getRateLimit() {
-    return 100; // Treat as authenticated
+    return 100;
   }
 
   override getCacheTTL() {
@@ -71,12 +70,19 @@ export async function getRedditTools(): Promise<RedditTools> {
 
   const config = loadConfig();
 
-  // Check if we have browser cookies
   if (config.cookies && Object.keys(config.cookies).length > 0) {
+    // Check for reddit_session cookie presence
+    if (!config.cookies['reddit_session']) {
+      if (!warnedOnce) {
+        warnedOnce = true;
+        warn('Cookies found but reddit_session is missing. Session may be invalid.');
+        warn('Run "reddit auth browser-login" to re-authenticate.');
+      }
+    }
     return createToolsWithCookies(config.cookies);
   }
 
-  // Otherwise, try OAuth
+  // OAuth path
   const envVars = getConfigEnvVars(config);
   for (const [key, value] of Object.entries(envVars)) {
     process.env[key] = value;
@@ -87,34 +93,23 @@ export async function getRedditTools(): Promise<RedditTools> {
 
   if (!authManager.isAuthenticated() && !warnedOnce) {
     warnedOnce = true;
-    console.error('Warning: No Reddit API credentials configured.');
-    console.error('Reddit requires OAuth for API access.');
+    console.error('No Reddit API credentials configured.');
     console.error('');
     console.error('Options:');
-    console.error('  1. Run "reddit auth login" to configure OAuth credentials');
-    console.error('     Get credentials at: https://www.reddit.com/prefs/apps');
-    console.error('');
-    console.error('  2. Run "reddit auth browser-login" to login via browser');
-    console.error('     (Opens Chrome, you log in, cookies are captured)');
+    console.error('  1. reddit auth browser-login  (recommended — opens Chrome)');
+    console.error('  2. reddit auth login          (needs API key from reddit.com/prefs/apps)');
     console.error('');
   }
 
-  const rateLimiter = new RateLimiter({ limit: 100, window: 60_000 });
-  const cacheManager = new CacheManager({ maxSize: 50 * 1024 * 1024 });
-
-  const api = new RedditAPI({
-    authManager,
-    rateLimiter,
-    cacheManager,
-    timeout: 15_000,
-  });
-
-  toolsInstance = new RedditTools(api);
-  return toolsInstance;
+  return createTools(authManager);
 }
 
 function createToolsWithCookies(cookies: Record<string, string>): RedditTools {
   const authManager = new BrowserCookieAuthManager(cookies);
+  return createTools(authManager);
+}
+
+function createTools(authManager: AuthManager): RedditTools {
   const rateLimiter = new RateLimiter({ limit: 100, window: 60_000 });
   const cacheManager = new CacheManager({ maxSize: 50 * 1024 * 1024 });
 
@@ -131,4 +126,5 @@ function createToolsWithCookies(cookies: Record<string, string>): RedditTools {
 
 export function resetTools(): void {
   toolsInstance = null;
+  warnedOnce = false;
 }
