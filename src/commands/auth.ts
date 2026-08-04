@@ -1,10 +1,10 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import chalk from 'chalk';
 import { fork } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { saveConfig, loadConfig, clearConfig, getConfigPath, getAuthTier, type CookieMeta } from '../config.js';
+import { saveConfig, loadConfig, clearConfig, getConfigPath, getAuthTier } from '../config.js';
 
 const CRITICAL_COOKIES = ['reddit_session', 'csrf_token', 'loid', 'token_v2'];
 
@@ -178,7 +178,7 @@ export function registerAuthCommand(program: Command): void {
 
         // Check for expiring soon
         const now = Date.now();
-        const expiringSoon = Object.entries(meta).filter(([name, m]) => {
+        const expiringSoon = Object.entries(meta).filter(([, m]) => {
           if (m.expires <= 0) return false;
           const diffMs = m.expires * 1000 - now;
           return diffMs > 0 && diffMs < 24 * 60 * 60 * 1000;

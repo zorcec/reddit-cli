@@ -33,7 +33,7 @@ export function formatPosts(data: unknown): FormattedPost[] {
 
   // Standard Reddit API format: { data: { children: [{ data: {...} }] } }
   return (result?.data?.children ?? []).map((child: any) => ({
-    title: child.data.title,
+    title: child.data.title ?? child.data.body ?? '',
     author: child.data.author,
     score: child.data.score,
     comments: child.data.num_comments,

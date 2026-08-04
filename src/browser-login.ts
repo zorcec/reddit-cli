@@ -21,7 +21,9 @@ function findChrome(): string {
     try {
       const resolved = execSync(`readlink -f $(which ${candidate} 2>/dev/null) 2>/dev/null`, { encoding: 'utf-8' }).trim();
       if (resolved && existsSync(resolved)) return resolved;
-    } catch {}
+    } catch {
+      // Candidate not found — try the next one
+    }
   }
 
   throw new Error('Chrome/Chromium not found. Install it or pass --chrome-path');

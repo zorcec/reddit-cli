@@ -4,8 +4,7 @@ import { RateLimiter } from 'reddit-mcp-buddy/dist/core/rate-limiter.js';
 import { RedditAPI } from 'reddit-mcp-buddy/dist/services/reddit-api.js';
 import { RedditTools } from 'reddit-mcp-buddy/dist/tools/index.js';
 import { loadConfig, getConfigEnvVars } from './config.js';
-import { warn, debug } from './utils/format.js';
-import chalk from 'chalk';
+import { warn } from './utils/format.js';
 
 let toolsInstance: RedditTools | null = null;
 let warnedOnce = false;

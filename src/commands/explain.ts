@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import chalk from 'chalk';
 import { getRedditTools } from '../mcp-client.js';
 import { cacheGet, cacheSet } from '../cache.js';
