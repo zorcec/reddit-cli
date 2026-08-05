@@ -83,17 +83,43 @@ function arrayToTable(rows: Record<string, unknown>[]): string {
 
   const keys = Object.keys(rows[0]);
   const colWidths = keys.map(k => {
-    const maxData = Math.max(...rows.map(r => String(r[k] ?? '').length));
+    const maxData = Math.max(...rows.map(r => formatCellValue(r[k]).length));
     return Math.max(k.length, maxData);
   });
 
   const header = keys.map((k, i) => k.padEnd(colWidths[i])).join('  ');
   const separator = colWidths.map(w => '─'.repeat(w)).join('──');
   const body = rows.map(row =>
-    keys.map((k, i) => String(row[k] ?? '').padEnd(colWidths[i])).join('  ')
+    keys.map((k, i) => formatCellValue(row[k]).padEnd(colWidths[i])).join('  ')
   );
 
   return [chalk.bold(header), chalk.dim(separator), ...body].join('\n');
+}
+
+/**
+ * Format a cell value for table display.
+ * Handles objects, arrays, and primitives properly.
+ */
+function formatCellValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    return `[${value.length} items]`;
+  }
+  if (typeof value === 'object') {
+    // For objects like coordinates, show key info
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return '{}';
+    if (keys.length <= 3) {
+      return keys.map(k => `${k}=${obj[k]}`).join(', ');
+    }
+    return `{${keys.length} fields}`;
+  }
+  return String(value);
 }
 
 function toCsv(data: unknown): string {
