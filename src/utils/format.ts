@@ -8,8 +8,31 @@ export interface FormatOptions {
   output?: string;
 }
 
-export function formatOutput(data: unknown, options: FormatOptions, meta?: Record<string, unknown>): void {
-  const formatted = formatString(data, options.format);
+export interface OutputEnvelope<T> {
+  status: 'success' | 'error';
+  data: T;
+  meta: Record<string, unknown>;
+  suggestions: string[];
+}
+
+export function formatOutput(data: unknown, options: FormatOptions, meta?: Record<string, unknown>, suggestions?: string[]): void {
+  let formatted: string;
+
+  if (options.format === 'json') {
+    // Use standardized JSON envelope
+    const envelope: OutputEnvelope<unknown> = {
+      status: 'success',
+      data,
+      meta: {
+        count: Array.isArray(data) ? data.length : undefined,
+        ...meta,
+      },
+      suggestions: suggestions ?? [],
+    };
+    formatted = JSON.stringify(envelope, null, 2);
+  } else {
+    formatted = formatString(data, options.format);
+  }
 
   if (options.output) {
     writeFileSync(options.output, formatted + '\n', 'utf-8');
@@ -18,9 +41,13 @@ export function formatOutput(data: unknown, options: FormatOptions, meta?: Recor
     console.log(formatted);
   }
 
-  if (meta) {
-    const metaLine = Object.entries(meta).map(([k, v]) => `${k}: ${v}`).join(' | ');
-    log(metaLine);
+  // Show suggestions in table mode
+  if (options.format === 'table' && suggestions && suggestions.length > 0) {
+    console.error('');
+    console.error(chalk.cyan('Suggestions:'));
+    for (const s of suggestions) {
+      console.error(chalk.dim(`  • ${s}`));
+    }
   }
 }
 
@@ -131,7 +158,7 @@ function toCsv(data: unknown): string {
   const keys = Object.keys(rows[0]);
   const header = keys.map(escapeCsv).join(',');
   const body = rows.map(row =>
-    keys.map(k => escapeCsv(String(row[k] ?? ''))).join(',')
+    keys.map(k => escapeCsv(formatCellValue(row[k]))).join(',')
   );
   return [header, ...body].join('\n');
 }

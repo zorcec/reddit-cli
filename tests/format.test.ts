@@ -59,7 +59,14 @@ describe('format', () => {
       const data = { foo: 'bar' };
       formatOutput(data, { format: 'json' });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(JSON.stringify(data, null, 2));
+      // JSON output now uses standardized envelope
+      const expected = {
+        status: 'success',
+        data,
+        meta: {},
+        suggestions: [],
+      };
+      expect(consoleLogSpy).toHaveBeenCalledWith(JSON.stringify(expected, null, 2));
     });
 
     it('outputs metadata to stderr', () => {
@@ -68,7 +75,9 @@ describe('format', () => {
 
       formatOutput(data, { format: 'json' }, meta);
 
-      expect(consoleErrorSpy).toHaveBeenCalled();
+      // No longer outputs meta to stderr in JSON mode
+      // Metadata is now part of the JSON envelope
+      expect(consoleLogSpy).toHaveBeenCalled();
     });
   });
 

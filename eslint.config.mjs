@@ -15,6 +15,11 @@ export default tseslint.config(
       'no-var': 'error',
       eqeqeq: ['error', 'always'],
       curly: ['error', 'multi-line'],
+      'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
+      'max-lines-per-function': ['error', { max: 100, skipBlankLines: true, skipComments: true }],
+      'complexity': ['error', 15],
+      'max-depth': ['error', 4],
+      'max-nested-callbacks': ['error', 3],
     },
   },
   {
