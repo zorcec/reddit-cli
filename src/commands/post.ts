@@ -22,6 +22,7 @@ export function registerPostCommand(program: Command): void {
     .option('--extract-links', 'Extract URLs from comments')
     .option('-f, --format <fmt>', 'Output format: table|json|compact-json|csv|raw', 'table')
     .option('-o, --output <file>', 'Write output to file')
+    .option('-q, --quiet', 'Suppress stderr output')
     .option('--no-cache', 'Skip cache, fetch fresh data')
     .option('--verbose', 'Show debug info')
     .action(async (urlOrId: string, options: {
@@ -33,10 +34,17 @@ export function registerPostCommand(program: Command): void {
       extractLinks?: boolean;
       format: OutputFormat;
       output?: string;
+      quiet?: boolean;
       cache: boolean;
       verbose?: boolean;
     }) => {
       try {
+        if (options.quiet) {
+          // Suppress all stderr output
+          const originalLog = log;
+          (global as any).__quietMode = true;
+        }
+        
         const tools = await getRedditTools();
         const verbose = options.verbose ?? false;
 
