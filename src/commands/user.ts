@@ -20,6 +20,7 @@ export function registerUserCommand(program: Command): void {
     .option('--top-subreddits <n>', 'Number of top subreddits (1-50)', '10')
     .option('-f, --format <fmt>', 'Output format: table|json|compact-json|csv|raw', 'table')
     .option('-o, --output <file>', 'Write output to file')
+    .option('-q, --quiet', 'Suppress stderr output')
     .option('--no-cache', 'Skip cache, fetch fresh data')
     .option('--verbose', 'Show debug info')
     .action(async (username: string, options: {
@@ -29,10 +30,15 @@ export function registerUserCommand(program: Command): void {
       topSubreddits?: string;
       format: OutputFormat;
       output?: string;
+      quiet?: boolean;
       cache: boolean;
       verbose?: boolean;
     }) => {
       try {
+        if (options.quiet) {
+          (global as any).__quietMode = true;
+        }
+        
         const tools = await getRedditTools();
         const verbose = options.verbose ?? false;
 

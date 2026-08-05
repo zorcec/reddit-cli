@@ -20,6 +20,7 @@ export function registerBrowseCommand(program: Command): void {
     .option('-l, --limit <n>', 'Number of results (1-100)', '25')
     .option('-f, --format <fmt>', 'Output format: table|json|compact-json|csv|raw', 'table')
     .option('-o, --output <file>', 'Write output to file')
+    .option('-q, --quiet', 'Suppress stderr output')
     .option('--after <cursor>', 'Pagination cursor for next page')
     .option('--no-cache', 'Skip cache, fetch fresh data')
     .option('--nsfw', 'Include NSFW content')
@@ -30,12 +31,17 @@ export function registerBrowseCommand(program: Command): void {
       limit?: string;
       format: OutputFormat;
       output?: string;
+      quiet?: boolean;
       after?: string;
       cache: boolean;
       nsfw?: boolean;
       verbose?: boolean;
     }) => {
       try {
+        if (options.quiet) {
+          (global as any).__quietMode = true;
+        }
+        
         const tools = await getRedditTools();
         const verbose = options.verbose ?? false;
 

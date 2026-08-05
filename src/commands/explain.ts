@@ -16,15 +16,21 @@ export function registerExplainCommand(program: Command): void {
     .argument('<term>', 'Reddit term or slang to explain')
     .option('-f, --format <fmt>', 'Output format: table|json|compact-json|csv|raw', 'table')
     .option('-o, --output <file>', 'Write output to file')
+    .option('-q, --quiet', 'Suppress stderr output')
     .option('--no-cache', 'Skip cache, fetch fresh data')
     .option('--verbose', 'Show debug info')
     .action(async (term: string, options: {
       format: OutputFormat;
       output?: string;
+      quiet?: boolean;
       cache: boolean;
       verbose?: boolean;
     }) => {
       try {
+        if (options.quiet) {
+          (global as any).__quietMode = true;
+        }
+        
         const tools = await getRedditTools();
         const verbose = options.verbose ?? false;
 
