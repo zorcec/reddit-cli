@@ -40,8 +40,6 @@ export function registerPostCommand(program: Command): void {
     }) => {
       try {
         if (options.quiet) {
-          // Suppress all stderr output
-          const originalLog = log;
           (global as any).__quietMode = true;
         }
         
